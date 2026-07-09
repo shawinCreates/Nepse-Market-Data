@@ -1,0 +1,47 @@
+name: Daily NEPSE Market Scrape
+
+permissions:
+  contents: write
+  
+on:
+  schedule:
+    # 6:00 PM NPT (Nepal Time = UTC+5:45) → 12:15 UTC
+    - cron: "15 12 * * *"
+  workflow_dispatch:  # Allow manual trigger too
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily market scrape
+        run: scrapy crawl market
+
+      - name: Commit and push new data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Track new/modified files in Data/ directory
+          git add Data/
+
+          # Only commit if there are changes
+          if git diff --cached --quiet; then
+            echo "No new data to commit."
+          else
+            git commit -m "Daily market scrape - $(TZ='Asia/Katmandu' date '+%Y-%m-%d %H:%M %Z')"
+            git push
+          fi
