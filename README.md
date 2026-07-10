@@ -1,36 +1,60 @@
-# 📈 NEPSE Market Data Scraper
+<div align="center">
 
-> **Automated daily & historical stock data from Nepal Stock Exchange — straight to your CSV and Excel.**
+```
+     ▸▸  NEBL +2.4%   NABIL -0.8%   NICA +1.1%   NLIC +0.3%  ▸▸
 
-A Scrapy-powered web scraper that pulls live trading data from [ShareSansar](https://www.sharesansar.com/today-share-price) and organizes it into clean, date-stamped CSV files and a master Excel workbook. Built for analysts, traders, and anyone who wants NEPSE data without the manual copy-paste.
+  █   █ █████ ████   ████ █████   ████   ███  █████  ███ 
+  ██  █ █     █   █ █     █       █   █ █   █   █   █   █
+  █ █ █ ████  ████   ███  ████    █   █ █████   █   █████
+  █  ██ █     █         █ █       █   █ █   █   █   █   █
+  █   █ █████ █     ████  █████   ████  █   █   █   █   █
+```
+
+</div>
+
+Scrapy-powered daily & historical scraper for the Nepal Stock Exchange
+
+<div align="center">
+
+[![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
+[![Scrapy](https://img.shields.io/badge/built%20with-scrapy-60c060.svg)](https://scrapy.org/)
+[![Automation](https://img.shields.io/badge/automation-GitHub%20Actions-2088FF.svg)](https://github.com/features/actions)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![Data Range](https://img.shields.io/badge/data-2010%E2%80%93present-orange.svg)](#)
+
+</div>
 
 ---
 
-## ✨ Features
+## Overview
 
-- **Daily scraping** — One command fetches today's market data automatically
-- **Historical backfill** — Scrape every trading day from 2010 to present
-- **Smart gap-filling** — Detect missing dates and fetch only what's needed
-- **Duplicate detection** — Compares data rows to avoid saving the same trading session twice
-- **Excel export** — All CSVs combined into a single workbook, one sheet per day
-- **Incremental updates** — Daily runs only add/update the latest sheet (no full rebuild)
-- **Polite scraping** — Configurable delays and concurrency to respect the server
-- **GitHub Actions automation** — Scheduled daily scrape at 6 PM NPT, auto-commits new data
+A Scrapy-based scraper that pulls daily trading data for the Nepal Stock Exchange (NEPSE) from [ShareSansar](https://www.sharesansar.com/today-share-price) and stores it as date-stamped CSV files plus a consolidated Excel workbook. Designed for repeatable, automated data collection — no manual copy-paste, no missed sessions.
 
----
+## Features
 
-## 🧱 Project Structure
+| Feature | Description |
+|---|---|
+| **Daily scraping** | One command fetches the current day's market data |
+| **Historical backfill** | Scrapes every trading day from 2010 to present |
+| **Gap detection** | Identifies missing dates and fetches only what's needed |
+| **Duplicate detection** | Compares row data to avoid re-saving an existing session |
+| **Excel export** | Combines all CSVs into a single workbook, one sheet per day |
+| **Incremental updates** | Daily runs append/update only the latest sheet |
+| **Rate-limited requests** | Configurable delay and concurrency per domain |
+| **CI/CD automation** | Scheduled daily run via GitHub Actions, auto-commits new data |
+
+## Project Structure
 
 ```
 nepse-market-data/
 ├── .github/
 │   └── workflows/
-│       └── daily_scrape.yml       # 🤖 Daily automation (6 PM NPT)
+│       └── daily_scrape.yml       # Daily automation (6 PM NPT)
 ├── Market_Scrape/
 │   ├── spiders/
-│   │   ├── market.py              # 🟢 Daily scrape spider
-│   │   ├── market_history.py      # 🔵 Historical backfill spider
-│   │   └── market_missing.py      # 🟡 Gap-filler spider
+│   │   ├── market.py              # Daily scrape spider
+│   │   ├── market_history.py      # Historical backfill spider
+│   │   └── market_missing.py      # Gap-filler spider
 │   └── utils/
 │       ├── dates.py               # Date iteration & filename helpers
 │       ├── excel.py               # Excel workbook builder & updater
@@ -38,61 +62,47 @@ nepse-market-data/
 │       ├── sharesansar.py         # Token extraction, AJAX requests, HTML parsing
 │       └── storage.py             # CSV save/load & duplicate detection
 ├── Data/
-│   ├── csv/                       # 📂 Daily CSV files (YYYY_MM_DD.csv)
+│   ├── csv/                       # Daily CSV files (YYYY_MM_DD.csv)
 │   └── excel/
-│       ├── combined_excel.xlsx    # 📊 Master workbook (one sheet per day)
+│       ├── combined_excel.xlsx    # Master workbook (one sheet per day)
 │       └── list_of_csv_files.txt  # Index of all CSV files
 ├── scrapy.cfg
 ├── requirements.txt
 └── README.md
 ```
 
----
+## Installation
 
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Python 3.8+
-- pip
-
-### Installation
+**Requirements:** Python 3.8+, pip
 
 ```bash
-# Clone the repo
-git clone https://github.com/yourusername/nepse-market-data.git
+git clone https://github.com/shawinCreates/Nepse-Market-Data.git
 cd nepse-market-data
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Usage
+## Usage
 
 ```bash
-# 🟢 Scrape today's market data
+# Scrape today's market data
 scrapy crawl market
 
-# 🔵 Backfill all historical data from 2010 to present
+# Backfill all historical data from 2010 to present
 scrapy crawl market_history
 
-# 🟡 Fill in any missing dates automatically
+# Fill in any missing dates automatically
 scrapy crawl market_missing
 ```
 
----
-
-## 🕷️ Spider Comparison
+## Spider Reference
 
 | Spider | When to use | What it does | Excel behavior |
 |---|---|---|---|
-| `market` | **Daily** (e.g., cron job or GitHub Action) | Fetches today's data, checks for duplicates | Incremental update (fast) |
-| `market_history` | **First run / backfill** | Scrapes every date from a start date to an end date, skipping existing files | Full rebuild on completion |
-| `market_missing` | **After backfill / maintenance** | Scans existing files, finds earliest date, fetches all gaps up to today | Full rebuild on completion |
+| `market` | Daily (cron / GitHub Action) | Fetches today's data, checks for duplicates | Incremental update |
+| `market_history` | First run / backfill | Scrapes every date in a range, skipping existing files | Full rebuild on completion |
+| `market_missing` | Maintenance | Finds the earliest gap and fetches forward to today | Full rebuild on completion |
 
----
-
-## 📄 Data Format
+## Data Format
 
 Each CSV row contains 24 fields per stock:
 
@@ -123,48 +133,38 @@ Each CSV row contains 24 fields per stock:
 | `52 Weeks High` | 52-week high |
 | `52 Weeks Low` | 52-week low |
 
----
-
-## ⚙️ Configuration
+## Configuration
 
 Key settings in `Market_Scrape/settings.py`:
 
 | Setting | Value | Purpose |
 |---|---|---|
 | `CONCURRENT_REQUESTS_PER_DOMAIN` | 1 | One request at a time per domain |
-| `DOWNLOAD_DELAY` | 1 second | Polite delay between requests |
+| `DOWNLOAD_DELAY` | 1 second | Delay between requests |
 | `ROBOTSTXT_OBEY` | True | Respects robots.txt |
 
-Historical spiders override these for faster backfilling:
-- `DOWNLOAD_DELAY`: 0.5s
-- `CONCURRENT_REQUESTS`: 4
+Historical spiders override these for faster backfilling: `DOWNLOAD_DELAY = 0.5s`, `CONCURRENT_REQUESTS = 4`.
 
----
+## GitHub Actions Automation
 
-## 🤖 GitHub Actions Automation
-
-A scheduled workflow runs automatically every day at **6:00 PM NPT** (Nepal Time):
+Runs automatically every day at **6:00 PM NPT**:
 
 1. Checks out the repository
 2. Installs Python dependencies
-3. Runs `scrapy crawl market` to fetch the day's data
+3. Runs `scrapy crawl market`
 4. Commits and pushes any new/modified CSV and Excel files
 
-You can also trigger it manually from the **Actions** tab in your GitHub repository.
+Can also be triggered manually from the **Actions** tab.
 
----
+## How It Works
 
-## 🧠 How It Works
+1. **Token handshake** — visits ShareSansar's main page, extracts a CSRF token from a hidden input field
+2. **AJAX request** — sends a POST request to the API endpoint with the token, target date, and sector filter
+3. **Parse response** — extracts the HTML table, splits into header + data rows
+4. **Save** — writes to `Data/csv/YYYY_MM_DD.csv`
+5. **Excel** — rebuilds the full workbook (bulk operations) or appends the latest sheet (daily runs)
 
-1. **Token handshake** — Visits ShareSansar's main page, extracts a CSRF token from a hidden input field
-2. **AJAX request** — Sends a POST request to the API endpoint with the token, target date, and sector filter
-3. **Parse response** — Extracts the HTML table, splits into header + data rows
-4. **Save** — Writes to `Data/csv/YYYY_MM_DD.csv`
-5. **Excel** — Either rebuilds the full workbook (bulk operations) or appends the latest sheet (daily runs)
-
----
-
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Tool | Purpose |
 |---|---|
@@ -173,11 +173,7 @@ You can also trigger it manually from the **Actions** tab in your GitHub reposit
 | [openpyxl](https://openpyxl.readthedocs.io/) | Excel file read/write |
 | [GitHub Actions](https://github.com/features/actions) | Scheduled daily automation |
 
----
-
-## 📁 Data Collected
-
-The dataset covers **NEPSE daily trading data from 2010 to present**, with **300–500+ stocks per trading day**. Each day is stored as a separate CSV file and as a named sheet in the master Excel workbook. The data is updated automatically every trading day at 6 PM NPT.
+## Data Collected
 
 | Metric | Value |
 |---|---|
@@ -187,8 +183,6 @@ The dataset covers **NEPSE daily trading data from 2010 to present**, with **300
 | File format | CSV (per day) + Excel (master workbook) |
 | Total files | One CSV per trading day |
 
----
-
-## 📝 License
+## License
 
 MIT
