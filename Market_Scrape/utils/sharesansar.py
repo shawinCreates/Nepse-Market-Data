@@ -1,58 +1,24 @@
-import scrapy
+"""
+Backward-compatible shim.
 
-def extract_token(response):
-    return response.xpath(
-        '//input[@name="_token"]/@value'
-    ).get()
+All logic that used to live here has moved to ajax.py as part of splitting
+the utility layer by response type (ajax / datatable / market-html) instead
+of growing one big sharesansar.py file. Existing spiders keep working
+unchanged because the same names are still importable from here.
 
-def has_market_data(response):
-    no_record = response.xpath(
-        '//td[contains(normalize-space(.),'
-        '"No Record Found")]'
-    ).get()
+New code should import from Market_Scrape.utils.ajax directly.
+"""
 
-    return no_record is None
+from .ajax import (
+    extract_token,
+    has_market_data,
+    parse_table,
+    build_ajax_request,
+)
 
-def parse_table(response):
-    rows = response.xpath('//table//tr')
-
-    table_data = []
-
-    for row in rows:
-        cells = row.xpath(
-            './/th//text() | .//td//text()'
-        ).getall()
-
-        cells = [
-            cell.strip()
-            for cell in cells
-            if cell.strip()
-        ]
-
-        if cells:
-            table_data.append(cells)
-
-    return table_data
-
-def build_ajax_request(
-    token,
-    date_str,
-    callback,
-    **kwargs,
-):
-    return scrapy.FormRequest(
-        url='https://www.sharesansar.com/ajaxtodayshareprice',
-        formdata={
-            '_token': token,
-            'sector': 'all_sec',
-            'date': date_str,
-        },
-        headers={
-            'X-Requested-With': 'XMLHttpRequest',
-            'Referer':
-                'https://www.sharesansar.com/today-share-price',
-        },
-        callback=callback,
-        cb_kwargs=kwargs,
-    )
-
+__all__ = [
+    "extract_token",
+    "has_market_data",
+    "parse_table",
+    "build_ajax_request",
+]

@@ -1,7 +1,7 @@
 from pathlib import Path
 import pandas as pd
 
-from .paths import CSV_DIR, ensure_directories
+from .paths import DAILY_PRICE_DIR, ensure_directories
 from .dates import filename_to_date
 
 def save_csv(table_data, path):
@@ -9,11 +9,7 @@ def save_csv(table_data, path):
 
     df = pd.DataFrame(table_data)
 
-    df.to_csv(
-        path,
-        header=False,
-        index=False,
-    )
+    df.to_csv(path, header=False, index=False)
 
 def list_csv_files():
     ensure_directories()
@@ -21,14 +17,14 @@ def list_csv_files():
     return sorted(
         [
             f.name
-            for f in CSV_DIR.glob("*.csv")
+            for f in DAILY_PRICE_DIR.glob("*.csv")
         ]
     )
 
 def existing_dates():
     dates = set()
 
-    for file in CSV_DIR.glob("*.csv"):
+    for file in DAILY_PRICE_DIR.glob("*.csv"):
         d = filename_to_date(file.name)
 
         if d:
@@ -55,7 +51,7 @@ def is_duplicate_of_latest(table_data, skip_file=None):
     if not files:
         return False
 
-    latest = CSV_DIR / files[-1]
+    latest = DAILY_PRICE_DIR / files[-1]
 
     try:
         prev = pd.read_csv(
@@ -76,3 +72,26 @@ def is_duplicate_of_latest(table_data, skip_file=None):
             prev[1:]
         )
     )
+
+
+def save_overview_dict(data: dict, directory: Path, filename: str):
+    """Save a flat dict (e.g. market summary) as a two-column label,value CSV."""
+    ensure_directories()
+
+    df = pd.DataFrame(
+        list(data.items()),
+        columns=["label", "value"],
+    )
+
+    df.to_csv(directory / filename, index=False)
+
+
+def save_overview_table(rows: list[dict], directory: Path, filename: str):
+    """Save a list of row dicts (e.g. top gainers, indices) as a CSV with
+    a proper header row. Writes an empty file with no rows if `rows` is
+    empty, so downstream code can always expect the file to exist."""
+    ensure_directories()
+
+    df = pd.DataFrame(rows)
+
+    df.to_csv(directory / filename, index=False)

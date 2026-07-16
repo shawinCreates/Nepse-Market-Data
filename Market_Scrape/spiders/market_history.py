@@ -2,11 +2,11 @@ from datetime import date, datetime
 
 import scrapy
 
-from Market_Scrape.utils.paths import CSV_DIR, ensure_directories
+from Market_Scrape.utils.paths import DAILY_PRICE_DIR, ensure_directories
 from Market_Scrape.utils.dates import daterange, date_to_filename
 from Market_Scrape.utils.sharesansar import extract_token, parse_table, has_market_data, build_ajax_request
 from Market_Scrape.utils.storage import save_csv
-from Market_Scrape.utils.excel import rebuild_workbook
+from Market_Scrape.utils.db import ensure_schema, load_daily_price_rows
 
 class MarketHistorySpider(scrapy.Spider):
     name = "market_history"
@@ -22,6 +22,7 @@ class MarketHistorySpider(scrapy.Spider):
 
     def parse(self, response):
         ensure_directories()
+        ensure_schema()
 
         token = extract_token(response)
 
@@ -34,7 +35,7 @@ class MarketHistorySpider(scrapy.Spider):
         for d in daterange( self.START_DATE, end_date):
             filename = date_to_filename(d)
 
-            if (CSV_DIR / filename).exists():
+            if (DAILY_PRICE_DIR / filename).exists():
                 continue
 
             yield build_ajax_request(
@@ -57,11 +58,9 @@ class MarketHistorySpider(scrapy.Spider):
 
         filename = date_to_filename(date_obj)
 
-        save_csv(table_data, CSV_DIR / filename)
+        save_csv(table_data, DAILY_PRICE_DIR / filename)
 
         self.logger.info(f"Saved {filename}")
 
-    def closed(self, reason):
-        rebuild_workbook()
-        self.logger.info("Excel workbook rebuilt successfully.")
-
+        row_count = load_daily_price_rows(table_data, date_obj)
+        self.logger.info(f"Upserted {row_count} rows into Postgres for {date_obj}.")

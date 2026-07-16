@@ -2,11 +2,11 @@ name: Daily NEPSE Market Scrape
 
 permissions:
   contents: write
-  
+
 on:
   schedule:
-    # 6:00 PM NPT (Nepal Time = UTC+5:45) → 12:15 UTC
-    - cron: "15 12 * * *"
+    # 4:00 PM NPT (Nepal Time = UTC+5:45) → 10:15 UTC
+    - cron: "15 10 * * *"
   workflow_dispatch:  # Allow manual trigger too
 
 jobs:
@@ -27,8 +27,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run daily market scrape
+      - name: Run daily price scrape
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: scrapy crawl market
+
+      - name: Run market overview scrape
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: scrapy crawl market_overview
 
       - name: Commit and push new data
         run: |
@@ -42,6 +49,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No new data to commit."
           else
-            git commit -m "Daily market scrape - $(TZ='Asia/Katmandu' date '+%Y-%m-%d %H:%M %Z')"
+            git commit -m "Daily market scrape - $(TZ='Asia/Kathmandu' date '+%Y-%m-%d %H:%M %Z')"
             git push
           fi

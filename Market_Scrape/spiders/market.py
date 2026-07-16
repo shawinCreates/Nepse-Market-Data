@@ -2,11 +2,11 @@ from datetime import datetime
 
 import scrapy
 
-from Market_Scrape.utils.paths import CSV_DIR, ensure_directories
+from Market_Scrape.utils.paths import DAILY_PRICE_DIR, ensure_directories
 from Market_Scrape.utils.dates import date_to_filename
 from Market_Scrape.utils.sharesansar import extract_token, parse_table, has_market_data, build_ajax_request
 from Market_Scrape.utils.storage import save_csv, is_duplicate_of_latest
-from Market_Scrape.utils.excel import update_latest_sheet
+from Market_Scrape.utils.db import ensure_schema, load_daily_price_rows
 
 class MarketSpider(scrapy.Spider):
     name = "market"
@@ -15,6 +15,7 @@ class MarketSpider(scrapy.Spider):
 
     def parse(self, response):
         ensure_directories()
+        ensure_schema()
 
         token = extract_token(response)
 
@@ -43,7 +44,7 @@ class MarketSpider(scrapy.Spider):
             return
 
         filename = date_to_filename(date_obj)
-        csv_path = CSV_DIR / filename
+        csv_path = DAILY_PRICE_DIR / filename
 
         if is_duplicate_of_latest(table_data, skip_file=filename):
             self.logger.info("Duplicate of latest session.")
@@ -53,6 +54,5 @@ class MarketSpider(scrapy.Spider):
 
         self.logger.info(f"Saved {filename}")
 
-        update_latest_sheet()
-        self.logger.info("Excel workbook updated successfully.")
-
+        row_count = load_daily_price_rows(table_data, date_obj)
+        self.logger.info(f"Upserted {row_count} rows into Postgres for {date_obj}.")
