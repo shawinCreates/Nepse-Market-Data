@@ -20,6 +20,7 @@ Layout of this file, one section per table (or table group):
 Public API (what spiders/scripts actually call):
     ensure_schema()
     load_daily_price_rows(table_data, trade_date)
+    daily_price_symbols(table_data)
     load_market_summary(summary, trade_date)
     load_indices(rows, trade_date)
     load_top_list(category_name, rows, trade_date)
@@ -45,16 +46,48 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 logger = logging.getLogger(__name__)
 
+_warned_no_db = False
+
+
+def _warn_no_db():
+    """One-time warning explaining that Postgres steps are being skipped."""
+    global _warned_no_db
+
+    if not _warned_no_db:
+        logger.warning(
+            "DATABASE_URL is not set — skipping all Postgres operations "
+            "(CSV-only mode; data is still saved to disk)."
+        )
+        _warned_no_db = True
+
 
 # === Connection + shared helpers ===========================================
 
+_batch_conn = None
+
+
 @contextmanager
 def get_connection():
+    """Connection context manager. Normally opens its own connection and
+    commits on success / rolls back on error. When inside bulk_upsert()
+    it reuses that shared connection instead (still committing/rolling
+    back per caller, exactly as before) — so long backfills don't pay a
+    connect round-trip per file."""
     if not DATABASE_URL:
         raise RuntimeError(
             "DATABASE_URL is not set. Add it to a .env file "
             "(DATABASE_URL=postgresql://...) or export it in the shell."
         )
+
+    if _batch_conn is not None:
+        try:
+            yield _batch_conn
+            _batch_conn.commit()
+        except Exception:
+            _batch_conn.rollback()
+            raise
+
+        return
 
     conn = psycopg2.connect(DATABASE_URL)
 
@@ -65,6 +98,29 @@ def get_connection():
         conn.rollback()
         raise
     finally:
+        conn.close()
+
+
+@contextmanager
+def bulk_upsert():
+    """Reuse a single connection for every get_connection() call inside
+    the block (see get_connection). The connection is opened once and
+    closed when the block exits."""
+    global _batch_conn
+
+    if not DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL is not set. Add it to a .env file "
+            "(DATABASE_URL=postgresql://...) or export it in the shell."
+        )
+
+    conn = psycopg2.connect(DATABASE_URL)
+    _batch_conn = conn
+
+    try:
+        yield
+    finally:
+        _batch_conn = None
         conn.close()
 
 
@@ -93,15 +149,19 @@ def _upsert(sql: str, values: list, key_indices: tuple) -> int:
     """Shared tail end of every load_*() function below: dedupe any
     same-batch conflict-key collisions (see _dedupe_by_key), skip the
     round trip entirely if there's nothing to write, otherwise
-    execute_values() the upsert and report how many rows went in."""
+    execute_values() the upsert and report how many rows went in. With no
+    DATABASE_URL configured this is a no-op (CSV-only mode)."""
     if not values:
+        return 0
+
+    if not DATABASE_URL:
+        _warn_no_db()
         return 0
 
     values = _dedupe_by_key(values, key_indices)
 
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            execute_values(cur, sql, values)
+    with get_connection() as conn, conn.cursor() as cur:
+        execute_values(cur, sql, values)
 
     return len(values)
 
@@ -148,18 +208,22 @@ def ensure_schema():
     """Create every table this module writes to if it doesn't exist yet,
     and bring the top_* tables' columns in line with CATEGORY_SCHEMAS if
     they were created by an older version of this file (see
-    _category_migration_sql). Safe to call on every spider run."""
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(DAILY_PRICE_CREATE_SQL)
-            cur.execute(MARKET_SUMMARY_CREATE_SQL)
-            cur.execute(INDICES_CREATE_SQL)
+    _category_migration_sql). Safe to call on every spider run. With no
+    DATABASE_URL configured this is a no-op (CSV-only mode)."""
+    if not DATABASE_URL:
+        _warn_no_db()
+        return
 
-            for schema in CATEGORY_SCHEMAS.values():
-                cur.execute(_category_create_sql(schema))
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(DAILY_PRICE_CREATE_SQL)
+        cur.execute(MARKET_SUMMARY_CREATE_SQL)
+        cur.execute(INDICES_CREATE_SQL)
 
-                for statement in _category_migration_sql(schema):
-                    cur.execute(statement)
+        for schema in CATEGORY_SCHEMAS.values():
+            cur.execute(_category_create_sql(schema))
+
+            for statement in _category_migration_sql(schema):
+                cur.execute(statement)
 
 
 # === daily_price =============================================================
@@ -331,6 +395,31 @@ def load_daily_price_rows(table_data, trade_date) -> int:
     ]
 
     return _upsert(DAILY_PRICE_UPSERT_SQL, values, key_indices=(0, 1))
+
+
+def daily_price_symbols(table_data) -> set:
+    """Symbols present in a parse_table()-shaped list (header first), as
+    a set of non-empty strings. Used by backfilldb.py to diff a CSV file
+    against what the DB already holds. Returns an empty set if the
+    header has no recognizable Symbol column."""
+    if not table_data:
+        return set()
+
+    header, *data_rows = table_data
+
+    col_index = _daily_price_header_index(header)
+    i = col_index.get("symbol")
+
+    if i is None:
+        return set()
+
+    symbols = set()
+
+    for row in data_rows:
+        if i < len(row) and row[i].strip():
+            symbols.add(row[i].strip())
+
+    return symbols
 
 
 # === market_summary ==========================================================

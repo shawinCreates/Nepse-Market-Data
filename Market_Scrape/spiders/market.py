@@ -2,11 +2,18 @@ from datetime import datetime
 
 import scrapy
 
-from Market_Scrape.utils.paths import DAILY_PRICE_DIR, ensure_directories
+from Market_Scrape.utils.calendar import is_saturday, mark_closed_day
 from Market_Scrape.utils.dates import date_to_filename
-from Market_Scrape.utils.sharesansar import extract_token, parse_table, has_market_data, build_ajax_request
-from Market_Scrape.utils.storage import save_csv, is_duplicate_of_latest
 from Market_Scrape.utils.db import ensure_schema, load_daily_price_rows
+from Market_Scrape.utils.paths import DAILY_PRICE_DIR, ensure_directories
+from Market_Scrape.utils.sharesansar import (
+    build_ajax_request,
+    extract_token,
+    has_market_data,
+    parse_table,
+)
+from Market_Scrape.utils.storage import is_duplicate_of_latest, save_csv
+
 
 class MarketSpider(scrapy.Spider):
     name = "market"
@@ -17,13 +24,17 @@ class MarketSpider(scrapy.Spider):
         ensure_directories()
         ensure_schema()
 
+        today = datetime.today().date()
+
+        if is_saturday(today):
+            self.logger.info("Saturday — market closed; skipping.")
+            return
+
         token = extract_token(response)
 
         if not token:
             self.logger.error("Could not find CSRF token.")
             return
-
-        today = datetime.today().date()
 
         yield build_ajax_request(
             token=token,
@@ -33,8 +44,14 @@ class MarketSpider(scrapy.Spider):
         )
 
     def parse_today(self, response, date_obj):
+        if response.status != 200:
+            self.logger.warning(
+                "HTTP %d from the AJAX endpoint (expected 200).", response.status
+            )
+
         if not has_market_data(response):
             self.logger.info("No market data available today.")
+            mark_closed_day(date_obj)
             return
 
         table_data = parse_table(response)

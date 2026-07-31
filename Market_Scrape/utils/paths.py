@@ -1,5 +1,5 @@
-from pathlib import Path
 from datetime import date
+from pathlib import Path
 
 ROOT_DIR = Path("Data")
 CSV_DIR = ROOT_DIR / "csv"

@@ -1,4 +1,5 @@
-from datetime import date, timedelta, datetime
+from datetime import date, datetime, timedelta
+
 
 def daterange(start_date: date, end_date: date):
     current = start_date

@@ -37,15 +37,17 @@ The project scrapes two categories of data:
 ## Features
 
 | Feature | Description |
-|---|---|
+|---|---|---|
 | **Daily scraping** | One command fetches the current day's market data |
 | **Historical backfill** | Scrapes every trading day from 2010 to present |
 | **Gap detection** | Identifies missing dates and fetches only what's needed |
+| **Closed-day tracking** | Confirmed non-trading days are recorded once and never re-requested |
+| **Staleness guard** | Overview data is skipped when ShareSansar shows a previous session |
 | **Market overview** | Captures daily summary, indices, and top-15 lists |
 | **Duplicate detection** | Compares row data to avoid re-saving an identical session |
 | **CSV storage** | One file per trading day under `Data/csv/daily_price/` |
 | **Postgres integration** | Upserts all scraped data into a Neon (Postgres) database |
-| **DB backfill script** | Loads existing CSV files into Postgres without re-fetching |
+| **DB sync script** | Fills only the dates/symbols the DB is missing, straight from CSV files |
 | **Rate-limited requests** | Configurable delay and concurrency per domain |
 | **CI/CD automation** | Scheduled daily run via GitHub Actions, auto-commits new data |
 | **Schema migration** | Database tables auto-adjust to schema changes on each run |
@@ -61,10 +63,12 @@ nepse-market-data/
 │   ├── spiders/
 │   │   ├── market.py                 # Daily price scrape spider
 │   │   ├── market_history.py         # Historical backfill spider (2010–present)
-│   │   ├── market_missing.py         # Gap-filler spider
-│   │   └── market_overview.py        # Market snapshot spider
+│   │   ├── market_missing.py         # Gap-filler spider (developer-run)
+│   │   ├── market_overview.py        # Market snapshot spider
+│   │   └── backfill_base.py          # Shared backfill logic (closed days, token refresh)
 │   ├── utils/
 │   │   ├── ajax.py                   # AJAX helpers for today-share-price endpoint
+│   │   ├── calendar.py               # Trading-calendar helpers (closed_days.csv, Saturdays)
 │   │   ├── datatable.py              # DataTables client for top-* endpoints
 │   │   ├── dates.py                  # Date iteration & filename helpers
 │   │   ├── db.py                     # Postgres (Neon) database loader
@@ -72,12 +76,9 @@ nepse-market-data/
 │   │   ├── paths.py                  # Centralized file path definitions
 │   │   ├── sharesansar.py            # Backward-compatible re-export shim
 │   │   └── storage.py                # CSV save/load & duplicate detection
-│   ├── items.py                      # Scrapy item definitions (placeholder)
-│   ├── middlewares.py                # Scrapy middleware stubs
-│   ├── pipelines.py                  # Scrapy pipeline stubs
-│   └── settings.py                   # Scrapy project settings
 ├── Data/
 │   ├── csv/
+│   │   ├── closed_days.csv           # Confirmed non-trading days (auto-recorded)
 │   │   ├── daily_price/              # Daily CSV files (YYYY_MM_DD.csv)
 │   │   └── overview/                 # Market overview snapshots
 │   │       └── YYYY-MM-DD/           # Per-day overview files
@@ -134,11 +135,15 @@ scrapy crawl market_overview
 # Backfill all historical data from 2010 to present
 scrapy crawl market_history
 
-# Fill in any missing dates automatically
+# Fill in any missing dates automatically (developer-run: NEPSE's closing
+# days shift over time, so gaps are filled on demand, not by CI)
 scrapy crawl market_missing
 
-# Load existing CSV files into Postgres (no network requests)
+# Sync existing CSV files into Postgres — fills only the dates/symbols
+# the database is missing, straight from the CSVs (no network requests)
 python backfilldb.py
+python backfilldb.py --check    # dry run: report missing data, write nothing
+python backfilldb.py --force    # re-upsert every file (idempotent)
 ```
 
 ## Spider Reference
@@ -147,7 +152,7 @@ python backfilldb.py
 |---|---|---|---|---|
 | `market` | Daily (cron / GitHub Action) | Today's per-stock OHLCV data | `Data/csv/daily_price/YYYY_MM_DD.csv` | Upserts into `daily_price` table |
 | `market_history` | First run / backfill | Every trading day from 2010, skipping existing files | One CSV per day | Upserts into `daily_price` table |
-| `market_missing` | Maintenance | Finds the earliest gap and fetches forward to today | One CSV per missing day | Upserts into `daily_price` table |
+| `market_missing` | Maintenance (developer-run) | Finds the earliest gap and fetches forward to today | One CSV per missing day | Upserts into `daily_price` table |
 | `market_overview` | Daily (runs alongside `market`) | Market summary, indices, top gainers/losers/turnovers/transactions/traded shares/brokers | `Data/csv/overview/YYYY-MM-DD/*.csv` (8 files) | Upserts into `market_summary`, `indices`, `top_*` tables |
 
 ## Data Format
@@ -224,7 +229,19 @@ All tables use `ON CONFLICT ... DO UPDATE` upsert semantics, making repeated run
 | `DOWNLOAD_DELAY` | 1 second | Delay between requests |
 | `ROBOTSTXT_OBEY` | True | Respects robots.txt |
 
-Historical spiders (`market_history`, `market_missing`) override these for faster backfilling: `DOWNLOAD_DELAY = 0.5s`, `CONCURRENT_REQUESTS = 4`.
+Historical spiders (`market_history`, `market_missing`) override these for faster backfilling: `DOWNLOAD_DELAY = 0.5s`, `CONCURRENT_REQUESTS = 4`, `CONCURRENT_REQUESTS_PER_DOMAIN = 4`.
+
+### Closed-Day Tracking
+
+NEPSE's calendar has shifted over the years (Friday sessions appeared in 2022 and 2026), so the source itself is the authority on which days closed:
+
+- **Saturdays** are skipped outright — NEPSE has never traded on a Saturday
+- Any day ShareSansar answers "No Record Found" is appended to `Data/csv/closed_days.csv` and skipped on all future runs
+- To re-check a day, simply remove its line from `closed_days.csv`
+
+### Overview Staleness Guard
+
+On closed days ShareSansar's `/market` page keeps showing the **previous session's** data. `market_overview` reads the page's `As of YYYY-MM-DD` marker and skips the run entirely (no CSVs, no DB writes) when that date isn't today — so a holiday never produces a bogus snapshot labeled with today's date.
 
 ### Environment Variables (`env.example`)
 
@@ -234,7 +251,7 @@ Historical spiders (`market_history`, `market_missing`) override these for faste
 
 ## GitHub Actions Automation
 
-Runs automatically every day at **4:00 PM NPT** (12:15 UTC):
+Runs automatically every day at **4:00 PM NPT** (10:15 UTC):
 
 1. Checks out the repository
 2. Installs Python dependencies
@@ -250,7 +267,7 @@ Can also be triggered manually from the **Actions** tab.
 
 1. **Token handshake** — visits ShareSansar's main page, extracts a CSRF token from a hidden input field
 2. **AJAX request** — sends a POST request to the API endpoint with the token, target date, and sector filter
-3. **Parse response** — extracts the HTML table, splits into header + data rows
+3. **Parse response** — extracts the HTML table, splits into header + data rows; "No Record Found" responses mark the day as closed in `closed_days.csv`
 4. **Save CSV** — writes to `Data/csv/daily_price/YYYY_MM_DD.csv`
 5. **Upsert to DB** — loads the parsed rows into the `daily_price` Postgres table
 
@@ -264,6 +281,10 @@ Can also be triggered manually from the **Actions** tab.
 ### Duplicate Detection
 
 The daily spider compares the current day's data against the most recent CSV file. If the data is identical (ignoring serial numbers), the file is not re-saved — preventing unnecessary commits in the automated pipeline.
+
+### Backfill Robustness
+
+Backfill spiders re-fetch the CSRF token mid-run if too many consecutive responses return no data (a stale token would otherwise fail the rest of the run silently), and non-200 responses are logged rather than confused with closed days.
 
 ### Schema Flexibility
 

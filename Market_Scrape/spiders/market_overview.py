@@ -2,16 +2,24 @@ from datetime import datetime
 
 import scrapy
 
-from Market_Scrape.utils.paths import ensure_directories, overview_dir_for_date
-from Market_Scrape.utils.html import parse_market_summary, parse_indices
-from Market_Scrape.utils.datatable import CATEGORIES, build_datatable_request, parse_category
-from Market_Scrape.utils.storage import save_overview_dict, save_overview_table
+from Market_Scrape.utils.datatable import (
+    CATEGORIES,
+    build_datatable_request,
+    parse_category,
+)
 from Market_Scrape.utils.db import (
     ensure_schema,
-    load_market_summary,
     load_indices,
+    load_market_summary,
     load_top_list,
 )
+from Market_Scrape.utils.html import (
+    parse_asof_date,
+    parse_indices,
+    parse_market_summary,
+)
+from Market_Scrape.utils.paths import ensure_directories, overview_dir_for_date
+from Market_Scrape.utils.storage import save_overview_dict, save_overview_table
 
 
 class MarketOverviewSpider(scrapy.Spider):
@@ -23,6 +31,11 @@ class MarketOverviewSpider(scrapy.Spider):
     about the latest values — each run writes into a dated folder under
     Data/csv/overview/YYYY-MM-DD/, overwriting that day's files if run
     again, and upserts the same data into Postgres keyed on trade_date.
+
+    On days the market is closed ShareSansar keeps showing the previous
+    session's data on /market, so the page's "As of" date is checked
+    first: if it isn't today, the run is skipped entirely (no CSVs, no
+    DB writes).
     """
 
     name = "market_overview"
@@ -34,6 +47,22 @@ class MarketOverviewSpider(scrapy.Spider):
         ensure_schema()
 
         today = datetime.today().date()
+
+        asof = parse_asof_date(response)
+
+        if asof is None:
+            self.logger.warning(
+                "Could not determine the session date from the page — "
+                "saving the overview data anyway."
+            )
+        elif asof != today:
+            self.logger.warning(
+                "Page shows the %s session, not today (%s) — the market "
+                "is likely closed. Skipping overview for today.",
+                asof, today,
+            )
+            return
+
         directory = overview_dir_for_date(today)
 
         summary = parse_market_summary(response)

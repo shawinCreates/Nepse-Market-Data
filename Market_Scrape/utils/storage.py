@@ -1,8 +1,10 @@
 from pathlib import Path
+
 import pandas as pd
 
-from .paths import DAILY_PRICE_DIR, ensure_directories
 from .dates import filename_to_date
+from .paths import DAILY_PRICE_DIR, ensure_directories
+
 
 def save_csv(table_data, path):
     ensure_directories()
@@ -38,9 +40,9 @@ def rows_without_serial(rows):
         for row in rows
     ]
 
+
 def is_duplicate_of_latest(table_data, skip_file=None):
     files = list_csv_files()
-
     if skip_file:
         files = [
             f

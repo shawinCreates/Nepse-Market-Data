@@ -10,15 +10,15 @@ New code should import from Market_Scrape.utils.ajax directly.
 """
 
 from .ajax import (
+    build_ajax_request,
     extract_token,
     has_market_data,
     parse_table,
-    build_ajax_request,
 )
 
 __all__ = [
+    "build_ajax_request",
     "extract_token",
     "has_market_data",
     "parse_table",
-    "build_ajax_request",
 ]

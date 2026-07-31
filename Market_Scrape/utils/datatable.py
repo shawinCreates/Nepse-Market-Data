@@ -14,11 +14,11 @@ X-Requested-With / Accept headers and a handful of DataTables query
 params (draw/start/length). See DATATABLE_HEADERS below.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from datetime import datetime
+from urllib.parse import urlencode
 
 from scrapy import Request, Selector
-from urllib.parse import urlencode
-from datetime import datetime
 
 BASE_URL = "https://www.sharesansar.com"
 
@@ -63,7 +63,7 @@ def build_datatable_request(endpoint, callback, cb_kwargs=None, length=15):
         params = {
             "draw": 1,
             "start": 0,
-            "length": 15,
+            "length": length,
 
             "columns[0][data]": "DT_Row_Index",
             "columns[1][data]": "number",

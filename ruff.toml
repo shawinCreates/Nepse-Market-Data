@@ -1,0 +1,35 @@
+# Ruff configuration. Run: ruff check .
+#
+# Curated rule set — the strict "ALL" selection would flag hundreds of
+# style nits across this codebase (docstring/typing/complexity pedantry)
+# that predate this file and aren't bugs. Selected rules target real
+# problems: undefined names, unused imports, syntax/whitespace, import
+# sorting, pyupgrade-able patterns, bugbear correctness, and obvious
+# security issues.
+#
+# Deliberate ignores (project conventions, not TODOs):
+#   N999  — "Market_Scrape" is the Scrapy project name, not a PEP8 package name
+#   RUF012 — start_urls / custom_settings as plain class attributes is the
+#            standard Scrapy pattern
+#   DTZ   — naive datetime.today() is intentional: the pipeline runs on
+#            schedules chosen so the runner's calendar date is the trading date
+#   BLE001 — deliberate defensive catches: is_duplicate_of_latest() treats an
+#            unreadable CSV as "not a duplicate", and backfilldb.py isolates
+#            per-file failures so one bad CSV can't abort a full sync
+#   S608  — SQL is built from static config constants (CATEGORY_SCHEMAS),
+#            never from user input
+#   T201  — backfilldb.py is a CLI tool; print() is its intended output
+#   E501  — repo style tolerates longer lines in data/table definitions
+#   INP001 — utils/ has no __init__.py by design (imports still resolve)
+
+lint.select = ["E", "F", "W", "I", "UP", "B", "SIM", "N", "RUF", "S"]
+lint.ignore = [
+    "N999",
+    "RUF012",
+    "DTZ",
+    "BLE001",
+    "S608",
+    "T201",
+    "E501",
+    "INP001",
+]
